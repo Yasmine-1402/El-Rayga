@@ -181,9 +181,9 @@ function initBeforeAfter() {
     slide.className = "ba-slide" + (i === 0 ? " active" : "");
     slide.innerHTML = `
       <div class="ba-comparison" id="baCmp${i}">
-        <img class="ba-after-img" src="${pair.after}" alt="بعد">
+        <img class="ba-after-img" src="${pair.before}" alt="قبل">
         <div class="ba-before" id="baBefore${i}">
-          <img src="${pair.before}" alt="قبل">
+          <img src="${pair.after}" alt="بعد">
         </div>
         <div class="ba-handle" id="baHandle${i}"></div>
         <span class="ba-label ba-label-after">🔥 بعد</span>
