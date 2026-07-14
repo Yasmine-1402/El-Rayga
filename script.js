@@ -40,6 +40,54 @@ const galleryItems = [
 
 // ── MEMORY WALL — no seed data, filled by real user submissions only ──────
 
+// ── FIREBASE PERSISTENCE HELPERS ─────────────────────
+function isFirebaseReady() {
+  return typeof window.db !== 'undefined';
+}
+
+// Push a new memory to Firebase (or localStorage fallback)
+function saveMemoryToDB(m) {
+  if (isFirebaseReady()) {
+    window.db.ref('memories').push(m);
+  }
+}
+
+// Load all memories from Firebase, then call the callback with an array
+function loadMemoriesFromDB(callback) {
+  if (!isFirebaseReady()) { callback([]); return; }
+  window.db.ref('memories').orderByChild('timestamp').once('value')
+    .then(snap => {
+      const list = [];
+      snap.forEach(child => list.push(child.val()));
+      list.reverse();  // newest first
+      callback(list);
+    })
+    .catch(() => callback([]));
+}
+
+// Increment lantern count in Firebase using a transaction
+function incrementLanternInDB() {
+  if (!isFirebaseReady()) return;
+  window.db.ref('lanternCount').transaction(current => (current || 0) + 1);
+}
+
+// Load lantern count from Firebase, then call the callback
+function loadLanternCountFromDB(callback) {
+  if (!isFirebaseReady()) { callback(0); return; }
+  window.db.ref('lanternCount').once('value')
+    .then(snap => callback(snap.val() || 0))
+    .catch(() => callback(0));
+}
+
+// Listen to live lantern count changes
+function listenLanternCount() {
+  if (!isFirebaseReady()) return;
+  window.db.ref('lanternCount').on('value', snap => {
+    const count = snap.val() || 0;
+    document.getElementById('lanternCount').textContent = count;
+  });
+}
+
 // ── ROADMAP DATA ─────────────────────────
 const roadmapSteps = [
   { icon:"🔥", label:"الحريق",           lit: true  },
@@ -142,12 +190,34 @@ function initGallery() {
 // ═══════════════════════════════════════════
 function initMemoryWall() {
   const container = document.getElementById("memoryCards");
-  // Start with an empty-state message; it disappears when users add memories
+  // Show empty state first, then load from Firebase
   const empty = document.createElement("p");
   empty.id = "memoryWallEmpty";
   empty.className = "memory-wall-empty";
-  empty.textContent = "لا توجد ذكريات بعد — كن أول من يشارك ذكرياته! 💬";
+  empty.textContent = "جاري تحميل الذكريات... ⏳";
   container.appendChild(empty);
+
+  loadMemoriesFromDB(memories => {
+    container.innerHTML = '';
+    if (memories.length === 0) {
+      const emptyMsg = document.createElement("p");
+      emptyMsg.id = "memoryWallEmpty";
+      emptyMsg.className = "memory-wall-empty";
+      emptyMsg.textContent = "لا توجد ذكريات بعد — كن أول من يشارك ذكرياته! 💬";
+      container.appendChild(emptyMsg);
+    } else {
+      memories.forEach(m => {
+        const card = document.createElement("div");
+        card.className = "memory-card";
+        card.innerHTML = `
+          <p class="memory-card-text">${m.text}</p>
+          <div class="memory-card-author">${m.name}</div>
+          <div class="memory-card-year">${m.year || ""}</div>
+        `;
+        container.appendChild(card);
+      });
+    }
+  });
 }
 
 function buildMemoryCard(m, isUser) {
@@ -253,13 +323,28 @@ function initFireImages() {
 let lanternCount = 0;
 
 function initLanterns() {
-  // Start with a handful of seed lanterns
+  // Start with a handful of seed lanterns (visual only)
   const seeds = [
     { x:15, msg: lanternMsgs[0] }, { x:34, msg: lanternMsgs[1] },
     { x:55, msg: lanternMsgs[2] }, { x:72, msg: lanternMsgs[3] },
     { x:85, msg: lanternMsgs[4] },
   ];
   seeds.forEach(s => spawnLantern(s.x, s.msg));
+
+  // Load the real count from Firebase and spawn that many extra lanterns
+  loadLanternCountFromDB(count => {
+    document.getElementById('lanternCount').textContent = count;
+    // Spawn a few visual lanterns based on the count (cap at 20 for performance)
+    const visualCount = Math.min(count, 20);
+    for (let i = 0; i < visualCount; i++) {
+      const xPct = 5 + Math.random() * 90;
+      const msg = lanternMsgs[(seeds.length + i) % lanternMsgs.length];
+      spawnLantern(xPct, msg);
+    }
+  });
+
+  // Listen for live updates to lantern count
+  listenLanternCount();
 }
 
 function spawnLantern(xPct, msg) {
@@ -285,6 +370,9 @@ window.lightNewLantern = function() {
   const xPct = 5 + Math.random() * 90;
   const msg  = lanternMsgs[lanternCount % lanternMsgs.length];
   spawnLantern(xPct, msg);
+
+  // Persist to Firebase
+  incrementLanternInDB();
 
   const btn = document.getElementById("lightLanternBtn");
   btn.textContent = "🏮 فانوسك اتضاء!";
@@ -321,13 +409,35 @@ function initRoadmap() {
 // SHARE YOUR MEMORY
 // ═══════════════════════════════════════════
 function initSharedMemories() {
-  // No pre-populated examples — only real user submissions appear here
   const container = document.getElementById("sharedMemories");
+  // Show loading state, then fetch from Firebase
   const empty = document.createElement("p");
   empty.id = "sharedMemoriesEmpty";
   empty.className = "memory-wall-empty";
-  empty.textContent = "ذكرياتك ستظهر هنا — شاركنا لحظة لا تُنسى! ✨";
+  empty.textContent = "جاري تحميل الذكريات... ⏳";
   container.appendChild(empty);
+
+  loadMemoriesFromDB(memories => {
+    container.innerHTML = '';
+    if (memories.length === 0) {
+      const emptyMsg = document.createElement("p");
+      emptyMsg.id = "sharedMemoriesEmpty";
+      emptyMsg.className = "memory-wall-empty";
+      emptyMsg.textContent = "ذكرياتك ستظهر هنا — شاركنا لحظة لا تُنسى! ✨";
+      container.appendChild(emptyMsg);
+    } else {
+      memories.forEach(m => {
+        const card = document.createElement("div");
+        card.className = "user-memory-card";
+        card.innerHTML = `
+          <div class="user-memory-name">✦ ${m.name}</div>
+          <div class="user-memory-year">${m.year ? "زارها سنة " + m.year : ""}</div>
+          <div class="user-memory-text">${m.text}</div>
+        `;
+        container.appendChild(card);
+      });
+    }
+  });
 }
 
 window.submitMemory = function(e) {
@@ -337,9 +447,11 @@ window.submitMemory = function(e) {
   const text = document.getElementById("memText").value.trim();
   if (!name || !text) return;
 
+  // ── Save to Firebase ──────────────────────────────────
+  saveMemoryToDB({ name, year, text, timestamp: Date.now() });
+
   // ── Shared Memories list ──────────────────────────────
   const container = document.getElementById("sharedMemories");
-  // Hide empty-state placeholder once first memory is added
   const sharedEmpty = document.getElementById("sharedMemoriesEmpty");
   if (sharedEmpty) sharedEmpty.remove();
 
@@ -357,7 +469,6 @@ window.submitMemory = function(e) {
 
   // ── Memory Wall ───────────────────────────────────────
   const wallContainer = document.getElementById("memoryCards");
-  // Hide empty-state placeholder once first memory is added
   const wallEmpty = document.getElementById("memoryWallEmpty");
   if (wallEmpty) wallEmpty.remove();
 

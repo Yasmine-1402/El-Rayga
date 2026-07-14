@@ -308,6 +308,26 @@
   <!-- TOAST -->
   <div class="toast" id="toast"></div>
 
+  <!-- Firebase SDK (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <script>
+    // ═══════════════════════════════════════════
+    // FIREBASE CONFIG — Replace with YOUR values
+    // from Firebase Console → Project Settings → Web App
+    // ═══════════════════════════════════════════
+    const firebaseConfig = {
+      apiKey: "AIzaSyAs5bJEpxICp46PNHBfnVQ3yfwFuTchKfg",
+      authDomain: "el-rayga.firebaseapp.com",
+      databaseURL: "https://el-rayga-default-rtdb.firebaseio.com",
+      projectId: "el-rayga",
+      storageBucket: "el-rayga.firebasestorage.app",
+      messagingSenderId: "887345599723",
+      appId: "1:887345599723:web:13fc3c2300e340d4ce9aae"
+    };
+    firebase.initializeApp(firebaseConfig);
+    window.db = firebase.database();
+  </script>
   <script src="script.js"></script>
 </body>
 
